@@ -40,7 +40,9 @@ dseg    segment para public 'data'
 	endLine2	db 10
 	bufferString 	db 25
 					db ?
-					db 26 dup(0)
+					db 26 dup('$'),13,10
+					
+					
 	contagemNumeros db 0
 	jaEscreveu		db 0
     carLido db 0
@@ -74,8 +76,8 @@ dseg    segment para public 'data'
 	Cor		db	7	; Guarda os atributos de cor do caracter
 	Car2		db	32	; Guarda um caracter do Ecran 
 	Cor2		db	7	; Guarda os atributos de cor do caracter
-	POSy		db	5	; a linha pode ir de [1 .. 25]
-	POSx		db	10	; POSx pode ir [1..80]	
+	POSy		db	8	; a linha pode ir de [1 .. 25]
+	POSx		db	30	; POSx pode ir [1..80]	
 	POSya		db	5	; Posição anterior de y
 	POSxa		db	10	; Posição anterior de x
 ;-----------------------------------------------------------------------
@@ -84,7 +86,7 @@ dseg    segment para public 'data'
 	STR12	 		DB 		"            "	; String para 12 digitos	
 	Segundos		dw		0				; Vai guardar os segundos actuais
 	Old_seg		dw		0				; Guarda os últimos segundos que foram lidos
-	MostrarSegundos dw 60
+	MostrarSegundos dw 10
 	NUMDIG	db	0	; controla o numero de digitos do numero lido
 	MAXDIG	db	4	; Constante que define o numero MAXIMO de digitos a ser aceite
 ;-------------------------------------------
@@ -384,7 +386,7 @@ inicio:
 
 verPont:
 	call apaga_ecran
-	    goto_xy 1,1
+	goto_xy 0,2
 		mov     ah,3dh			; vamos abrir ficheiro para leitura 
         mov     al,0			; tipo de ficheiro	
         lea     dx,FichNovo			; nome do ficheiro
@@ -552,17 +554,13 @@ CICLO:		goto_xy	POSxa,POSya	; Vai para a posição anterior do cursor
 		mov		ah, 02h
 		mov		dl, Car	; Repoe Caracter guardado 
 		int		21H	
-
+aqui:	
 		inc		POSxa
 		goto_xy		POSxa,POSya
-		cmp Car2,1
-		je aqui
 		mov		ah, 02h
 		mov		dl, Car2	; Repoe Caracter2 guardado 
-		int		21H	
-aqui:
-		dec 		POSxa
-		
+		int		21H
+aqui5:	
 		goto_xy	POSx,POSy	; Vai para nova possição
 		mov 		ah, 08h
 		mov		bh,0		; numero da página
@@ -622,7 +620,7 @@ LER_SETA:
 		je		teclaenter
 		jmp		LER_SETA
 fim_tempo:
-		mov MostrarSegundos,60
+		mov MostrarSegundos,10
 		mov AcabouTempo,0
 		call apaga_ecran
 ;---Mostra a pontuação no final do tempo
@@ -675,7 +673,6 @@ escreverPont:
         mov     cx,1			
         lea     dx,carLido
         int     21h	
-		
 		cmp ax,0
 		jne escreverPont
 		
@@ -696,7 +693,8 @@ escreverPont:
 		mov ah,40h
 		int 21h
 		xor cx,cx
-		mov cl,25
+		
+		mov cl,bufferString[1]
 		
 		lea dx,bufferString
 		add dx,2
@@ -707,6 +705,7 @@ escreverPont:
 		lea dx,endLine1
 		mov ah,40h
 		int 21h
+		
 		mov cx,1
 		lea dx,endLine2
 		mov ah,40h
@@ -731,28 +730,45 @@ erro_abrir:
 ESTEND:		cmp 		al,48h
 		jne		BAIXO
 		dec		POSy		;cima
+		cmp POSy,8
+		jb	limitar1
 		jmp		CICLO
-
+limitar1:
+		inc POSY
+		jmp Ciclo
 BAIXO:		cmp		al,50h
 		jne		ESQUERDA
 		inc 		POSy		;Baixo
+		cmp POSy,14
+		jae	limitar2
 		jmp		CICLO
-
+limitar2:
+		dec POSY
+		jmp Ciclo
 ESQUERDA:
 		cmp		al,4Bh
 		jne		DIREITA
 		dec		POSx		;Esquerda
 		dec		POSx		;Esquerda
-
+		cmp POSx,30
+		jb	limitar3
 		jmp		CICLO
-
+limitar3:
+		inc 	POSx
+		inc 	POSx
+		jmp Ciclo
 DIREITA:
 		cmp		al,4Dh
 		jne		LER_SETA 
 		inc		POSx		;Direita
 		inc		POSx		;Direita
-		
+		cmp POSx,48
+		jae	limitar4
 		jmp		CICLO
+limitar4:
+		dec 	POSx
+		dec 	POSx
+		jmp Ciclo
 		
 teclaenter:
 	mov contagemCarinhasC,0
