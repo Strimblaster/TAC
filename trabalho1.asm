@@ -21,7 +21,7 @@ dseg    segment para public 'data'
 	guardaCor db	?
 	acumuladorX	db	1
 	acumuladorY	db	1
-	car_lido	dw  0
+
 	CalcPos 	dw	?
 	mult	db	2
 	posInicial	dw	?
@@ -76,8 +76,8 @@ dseg    segment para public 'data'
 	Cor		db	7	; Guarda os atributos de cor do caracter
 	Car2		db	32	; Guarda um caracter do Ecran 
 	Cor2		db	7	; Guarda os atributos de cor do caracter
-	POSy		db	8	; a linha pode ir de [1 .. 25]
-	POSx		db	30	; POSx pode ir [1..80]	
+	POSy		db	5	; a linha pode ir de [1 .. 25]
+	POSx		db	10	; POSx pode ir [1..80]	
 	POSya		db	5	; Posição anterior de y
 	POSxa		db	10	; Posição anterior de x
 ;-----------------------------------------------------------------------
@@ -452,55 +452,7 @@ jogar:
 	int 	21h
 	cmp al,49
 	je jogar1
-	cmp al,50
-	je carregarFich
 	jmp jogar
-
-carregarFich:
-verPont1:
-	call apaga_ecran
-		mov     ah,3dh		; vamos abrir ficheiro para leitura 
-        mov     al,0			; tipo de ficheiro	
-        lea     dx,FichOld			; nome do ficheiro
-        int     21h			; abre para leitura 
-        jc      erro_abrir2		; pode aconter erro a abrir o ficheiro 
-        mov     HandleFichOld,ax		; ax devolve o Handle para o ficheiro 
-        jmp     ler_ciclo		; depois de abero vamos ler o ficheiro 
-
-erro_abrir2:
-        mov     ah,09h
-        lea     dx,Erro_Open
-        int     21h
-		jmp 	esperarEscape
-
-ler_ciclo2:
-        mov     ah,3fh			; indica que vai ser lido um ficheiro 
-        mov     bx,HandleFichOld		; bx deve conter o Handle do ficheiro previamente aberto 
-        mov     cx,2			; numero de bytes a ler 
-        lea     dx,car_Lido		; vai ler para o local de memoria apontado por dx (car_fich)
-        int     21h				; faz efectivamente a leitura
-		jc	    erro_ler1		; se carry é porque aconteceu um erro
-		cmp	    ax,0			;EOF?	verifica se já estamos no fim do ficheiro 
-		je	    fecha_ficheiro2	; se EOF fecha o ficheiro 
-        mov 	ax,car_Lido
-		mov 	es:[contadorGrelha],ax
-		inc 	contadorGrelha
-		inc 	contadorGrelha
-		jmp	    ler_ciclo2		; continua a ler o ficheiro
-
-erro_ler1:
-        mov     ah,09h
-        lea     dx,Erro_Ler_Msg
-        int     21h
-		jmp esperarEscape
-
-fecha_ficheiro2:					; vamos fechar o ficheiro 
-        mov     ah,3eh
-        mov     bx,HandleFichOld
-        int     21h
-        jmp 	cursor
-	
-	
 jogar1:	
 	call	apaga_ecran
 	goto_xy	30,1
@@ -602,13 +554,17 @@ CICLO:		goto_xy	POSxa,POSya	; Vai para a posição anterior do cursor
 		mov		ah, 02h
 		mov		dl, Car	; Repoe Caracter guardado 
 		int		21H	
-aqui:	
+
 		inc		POSxa
 		goto_xy		POSxa,POSya
+		cmp Car2,1
+		je aqui
 		mov		ah, 02h
 		mov		dl, Car2	; Repoe Caracter2 guardado 
-		int		21H
-aqui5:	
+		int		21H	
+aqui:
+		dec 		POSxa
+		
 		goto_xy	POSx,POSy	; Vai para nova possição
 		mov 		ah, 08h
 		mov		bh,0		; numero da página
@@ -722,8 +678,8 @@ escreverPont:
         lea     dx,carLido
         int     21h	
 		cmp ax,0
-		jne escreverPont
-		
+		je escrever
+escrever:		
 		lea dx,pont3
 		mov ah,40h
 		int 21h
@@ -778,45 +734,28 @@ erro_abrir:
 ESTEND:		cmp 		al,48h
 		jne		BAIXO
 		dec		POSy		;cima
-		cmp POSy,8
-		jb	limitar1
 		jmp		CICLO
-limitar1:
-		inc POSY
-		jmp Ciclo
+
 BAIXO:		cmp		al,50h
 		jne		ESQUERDA
 		inc 		POSy		;Baixo
-		cmp POSy,14
-		jae	limitar2
 		jmp		CICLO
-limitar2:
-		dec POSY
-		jmp Ciclo
+
 ESQUERDA:
 		cmp		al,4Bh
 		jne		DIREITA
 		dec		POSx		;Esquerda
 		dec		POSx		;Esquerda
-		cmp POSx,30
-		jb	limitar3
+
 		jmp		CICLO
-limitar3:
-		inc 	POSx
-		inc 	POSx
-		jmp Ciclo
+
 DIREITA:
 		cmp		al,4Dh
 		jne		LER_SETA 
 		inc		POSx		;Direita
 		inc		POSx		;Direita
-		cmp POSx,48
-		jae	limitar4
+		
 		jmp		CICLO
-limitar4:
-		dec 	POSx
-		dec 	POSx
-		jmp Ciclo
 		
 teclaenter:
 	mov contagemCarinhasC,0
@@ -1405,14 +1344,14 @@ sair:
 	mov 	al,1
 	lea     dx,FichOld		
 	int     21h
-	jc      erro_abrir3				
+	jc      erro_abrir2				
 	mov     HandleFichNovo,ax		; ax devolve o Handle para o ficheiro 
 	
 	mov bx,HandleFichNovo
+escreverTudo:
 	mov	ax,0B800h
 	mov	es,ax
-escreverTudo:
-	mov ax,es:[contadorGrelha]
+	mov ax,es:[bx]
 	mov guardarWordGrelha,ax
 	mov cx,1
 	lea dx,guardarWordGrelha
@@ -1420,19 +1359,20 @@ escreverTudo:
 	int 21h
 	inc contadorGrelha
 	inc contadorGrelha
+	inc bx
+	inc bx
 	cmp contadorGrelha,2000
-	je fecha_ficheiro3
+	je fecha_ficheiro2
 	jmp escreverTudo
 	
 
-fecha_ficheiro3:					; vamos fechar o ficheiro 
-	mov contadorGrelha,0
+fecha_ficheiro2:					; vamos fechar o ficheiro 
 	mov     ah,3eh
 	mov     bx,HandleFichNovo
 	int     21h
 	jmp fim
 		
-erro_abrir3:
+erro_abrir2:
 	mov     ah,09h
 	lea     dx,Erro_Open
 	int     21h
