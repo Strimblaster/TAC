@@ -13,7 +13,7 @@ dseg    segment para public 'data'
 	msgJogar2 db '2- Carregar grelha','$'
 	grelha db 0
 	contadorGrelha dw 0
-	guardarWordGrelha dw 0
+	bufferGrelha db 0
 	num	 db 	60
 	verCor	dw	?
 	CalcX 	dw	?
@@ -86,7 +86,7 @@ dseg    segment para public 'data'
 	STR12	 		DB 		"            "	; String para 12 digitos	
 	Segundos		dw		0				; Vai guardar os segundos actuais
 	Old_seg		dw		0				; Guarda os últimos segundos que foram lidos
-	MostrarSegundos dw 10
+	MostrarSegundos dw 60
 	NUMDIG	db	0	; controla o numero de digitos do numero lido
 	MAXDIG	db	4	; Constante que define o numero MAXIMO de digitos a ser aceite
 ;-------------------------------------------
@@ -457,48 +457,67 @@ jogar:
 	jmp jogar
 
 carregarFich:
-verPont1:
+	xor 	cx,cx
+	mov     ah,3Dh
+	mov 	al,0
+	lea     dx,FichOld		
+	int     21h
+	jc      erro_abrir3				
+	mov     HandleFichNovo,ax		; ax devolve o Handle para o ficheiro 
 	call apaga_ecran
-		mov     ah,3dh		; vamos abrir ficheiro para leitura 
-        mov     al,0			; tipo de ficheiro	
-        lea     dx,FichOld			; nome do ficheiro
-        int     21h			; abre para leitura 
-        jc      erro_abrir2		; pode aconter erro a abrir o ficheiro 
-        mov     HandleFichOld,ax		; ax devolve o Handle para o ficheiro 
-        jmp     ler_ciclo		; depois de abero vamos ler o ficheiro 
+	mov bx,HandleFichNovo
+	mov POSx,30
+	mov POSy,8
+tacCancer3:
+	goto_xy POSx,POSy
+	xor ax,ax
+	add	al, POSx ;
+	adc ax,0
+	add	al, POSx ; 2 * coluna
+	adc ax,0
+	mov guardar,ax
+	mov	al, 160		
+	mov	ah, POSy
+	mul	ah			; multiplicar o nº da linha por 160
+	add ax,guardar 	; somar tudo (160*linha)+(2*coluna)
+	adc ax,0
+	mov bx,ax
+	mov posInicial,bx
+	mov     ah,3fh			; indica que vai ser lido um ficheiro 
+    mov     bx,HandleFichNovo		; bx deve conter o Handle do ficheiro previamente aberto 
+    mov     cx,1			; numero de bytes a ler 
+    lea     dx,carLido		; vai ler para o local de memoria apontado por dx (car_fich)
+	int     21h				; faz efectivamente a leitura
+	mov	bx, posInicial
+	mov al,carLido
+	mov es:[bx+1],al
+	mov es:[bx+3],al
 
-erro_abrir2:
-        mov     ah,09h
-        lea     dx,Erro_Open
-        int     21h
-		jmp 	esperarEscape
-
-ler_ciclo2:
-        mov     ah,3fh			; indica que vai ser lido um ficheiro 
-        mov     bx,HandleFichOld		; bx deve conter o Handle do ficheiro previamente aberto 
-        mov     cx,2			; numero de bytes a ler 
-        lea     dx,car_Lido		; vai ler para o local de memoria apontado por dx (car_fich)
-        int     21h				; faz efectivamente a leitura
-		jc	    erro_ler1		; se carry é porque aconteceu um erro
-		cmp	    ax,0			;EOF?	verifica se já estamos no fim do ficheiro 
-		je	    fecha_ficheiro2	; se EOF fecha o ficheiro 
-        mov 	ax,car_Lido
-		mov 	es:[contadorGrelha],ax
-		inc 	contadorGrelha
-		inc 	contadorGrelha
-		jmp	    ler_ciclo2		; continua a ler o ficheiro
-
-erro_ler1:
-        mov     ah,09h
-        lea     dx,Erro_Ler_Msg
-        int     21h
-		jmp esperarEscape
-
-fecha_ficheiro2:					; vamos fechar o ficheiro 
-        mov     ah,3eh
-        mov     bx,HandleFichOld
-        int     21h
-        jmp 	cursor
+	inc POSx
+	inc POSx
+	cmp POSx,48
+	jae mudardelinha3
+	jmp tacCancer3
+mudardelinha3:
+	cmp POSy,14
+	jae fecha_ficheiro7
+	inc POSy
+	mov POSx,30
+	jmp tacCancer3	
+fecha_ficheiro7:
+	mov 	grelha,0
+	mov     ah,3eh
+	mov     bx,HandleFichNovo
+	int     21h
+	goto_xy	30,1
+	MOV AH,09H
+	LEA DX,StringPontuacao 
+	INT 21H
+	mov pont,'0'
+	mov pont1,'0'
+	mov pont2,'0'
+	mov pont3,'0'
+	jmp LER_SETA
 	
 	
 jogar1:	
@@ -668,7 +687,7 @@ LER_SETA:
 		je		teclaenter
 		jmp		LER_SETA
 fim_tempo:
-		mov MostrarSegundos,10
+		mov MostrarSegundos,60
 		mov AcabouTempo,0
 		call apaga_ecran
 ;---Mostra a pontuação no final do tempo
@@ -873,22 +892,29 @@ verticalCimaDeslizarNovaCor:
 	and al,01110000b
 	cmp al,0
 	je verticalCimaDeslizarNovaCor
-	cmp ah,30
+	cmp al,30
 	ja semcarinha1
-	mov ah,1
-	mov es:[bx],ah
-	mov ah,0
-	mov es:[bx+2],ah
-	mov es:[bx+1],al
-	mov es:[bx+3],al
+	mov al,1
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
 	inc explodiu
 	jmp verticalBaixo
 semcarinha1:
+	cmp al,240
+	jb	sem_traco8
+	mov al,45
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
+	mov bx,posInicial
 	xor ah,ah
-	mov es:[bx],ah
-	mov es:[bx+2],ah
-	mov es:[bx+1],al
-	mov es:[bx+3],al
+	inc explodiu
+	jmp verticalBaixo
+sem_traco8:
+	xor al,al
+	mov es:[bx],ax
+	mov es:[bx+2],ax
 	inc explodiu
 	
 	
@@ -929,27 +955,36 @@ explodirCursor: ;TEM QUE EXPLODIR E DESLIZAR PRIMEIRO O CUBO SELECIONADO PELO CU
 	sub bx,160
 	jmp explodirCursor
 explodirNovaCor:
+	mov Car,' '
+	mov Car2,' '
 	call CalcAleat
 	pop ax
-	and al,01110000b
-	cmp al,0
+	and ah,01110000b
+	cmp ah,0
 	je explodirNovaCor
-	cmp ah,30
+	cmp al,30
 	ja semcarinha5
-	mov ah,1
-	mov es:[bx],ah
-	mov es:[bx+1],al
-	mov ah,0
-	mov es:[bx+3],al
-	mov es:[bx+2],ah
+	mov al,1
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
 	inc explodiu
 	jmp	verticalBaixoDeslizar
 semcarinha5:
+	cmp al,240
+	jb	sem_traco5
+	mov al,45
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
+	mov bx,posInicial
 	xor ah,ah
-	mov es:[bx],ah
-	mov es:[bx+1],al
-	mov es:[bx+3],al
-	mov es:[bx+2],ah
+	inc explodiu
+	jmp verticalBaixoDeslizar
+sem_traco5:
+	xor al,al
+	mov es:[bx],ax
+	mov es:[bx+2],ax
 	mov bx,posInicial
 	add bx,160
 	inc explodiu
@@ -969,26 +1004,33 @@ verticalBaixoDeslizar:
 verticalBaixoDeslizarNovaCor:
 	call CalcAleat
 	pop ax
-	and al,01110000b
-	cmp al,0
+	and ah,01110000b
+	cmp ah,0
 	je verticalBaixoDeslizarNovaCor
-	cmp ah,30
+	cmp al,30
 	ja semcarinha4
-	mov ah,1
-	mov es:[bx],ah
-	mov es:[bx+1],al
-	mov ah,0
-	mov es:[bx+3],al
-	mov es:[bx+2],ah
+	mov al,1
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
 	inc explodiu
 	mov baixo1,1
 	jmp	horizontalDir
 semcarinha4:
+	cmp al,240
+	jb	sem_traco4
+	mov al,45
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
+	mov bx,posInicial
 	xor ah,ah
-	mov es:[bx],ah
-	mov es:[bx+1],al
-	mov es:[bx+3],al
-	mov es:[bx+2],ah
+	inc explodiu
+	jmp HorizontalDir
+sem_traco4:
+	xor al,al
+	mov es:[bx],ax
+	mov es:[bx+2],ax
 	inc explodiu
 	mov baixo1,1
 	
@@ -1022,25 +1064,32 @@ horizontalDirDeslizar:
 horizontalDirDeslizarNovaCor:
 	call CalcAleat
 	pop ax
-	and al,01110000b
-	cmp al,0
+	and ah,01110000b
+	cmp ah,0
 	je horizontalDirDeslizarNovaCor
-	cmp ah,30
+	cmp al,30
 	ja semcarinha3
-	mov ah,1
-	mov es:[bx],ah
-	mov es:[bx+1],al
-	mov ah,0
-	mov es:[bx+3],al
-	mov es:[bx+2],ah
+	mov al,1
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
 	inc explodiu
 	jmp	horizontalEsq
 semcarinha3:
+	cmp al,240
+	jb	sem_traco3
+	mov al,45
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
+	mov bx,posInicial
 	xor ah,ah
-	mov es:[bx],ah
-	mov es:[bx+1],al
-	mov es:[bx+3],al
-	mov es:[bx+2],ah
+	inc explodiu
+	jmp HorizontalEsq
+sem_traco3:
+	xor al,al
+	mov es:[bx],ax
+	mov es:[bx+2],ax
 	mov bx,posInicial
 	inc explodiu
 	
@@ -1072,25 +1121,32 @@ horizontalEsqDeslizar:
 horizontalEsqDeslizarNovaCor:
 	call CalcAleat
 	pop ax
-	and al,01110000b
-	cmp al,0
+	and ah,01110000b
+	cmp ah,0
 	je horizontalEsqDeslizarNovaCor
-	cmp ah,30
+	cmp al,30
 	ja semcarinha2
-	mov ah,1
-	mov es:[bx],ah
-	mov es:[bx+1],al
-	mov ah,0
-	mov es:[bx+3],al
-	mov es:[bx+2],ah
+	mov al,1
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
 	inc explodiu
 	jmp	explodir
 semcarinha2:
+	cmp al,240
+	jb	sem_traco2
+	mov al,45
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
+	mov bx,posInicial
 	xor ah,ah
-	mov es:[bx],ah
-	mov es:[bx+1],al
-	mov es:[bx+3],al
-	mov es:[bx+2],ah
+	inc explodiu
+	jmp explodir
+sem_traco2:
+	xor al,al
+	mov es:[bx],ax
+	mov es:[bx+2],ax
 	mov bx,posInicial
 	inc explodiu	
 	
@@ -1115,18 +1171,20 @@ continuar:
 	cmp ah,0111b
 	je explodirDeslizarNovacor
 	mov es:[bx],ax
-		mov al,0
+	mov al,0
 	mov es:[bx+2],ax
 	sub	bx,160
 	jmp explodirDeslizar
 explodirDeslizarNovacor:
+	mov Car,' '
+	mov Car2,' '
 	call CalcAleat
 	pop ax
 	and ah,01110000b
 	cmp ah,0
 	je explodirDeslizarNovacor
-	cmp ah,30
-	ja carinha
+	cmp al,30
+	ja semcarinha
 	mov al,1
 	mov es:[bx],ax
 	mov al,0
@@ -1135,7 +1193,19 @@ explodirDeslizarNovacor:
 	xor ah,ah
 	inc explodiu
 	jmp pontuacaoCalc
-carinha:
+semcarinha:
+	cmp al,240
+	jb	sem_traco
+	mov al,45
+	mov es:[bx],ax
+	mov al,0
+	mov es:[bx+2],ax
+	mov bx,posInicial
+	xor ah,ah
+	inc explodiu
+	jmp pontuacaoCalc
+sem_traco:
+	mov	dh,45
 	xor al,al
 	mov es:[bx],ax
 	mov al,0
@@ -1210,6 +1280,14 @@ incLinha:
 	jmp cicloComb
 
 
+	
+	
+	
+	
+	
+	
+	
+	
 
 editarGrelha:
 	call apaga_ecran
@@ -1230,7 +1308,8 @@ editarGrelha:
 
 	cmp		al,49
 	je		criarGrelha
-	cmp     al,50	
+	cmp     al,50
+	je 		carregarGrelha
 	jmp		editarGrelha
 	
 criarGrelha:
@@ -1251,7 +1330,7 @@ criarGrelha:
 	mov al,tempFichGrelha[5]
 	mov nomeFichGrelha[2],al
 	call apaga_ecran
-	
+
 	
 	
 	
@@ -1280,9 +1359,11 @@ cicloo:
 		mov	es:[bx],dh	;
 	
 novacor1:	
-		mov ah,0
-		mov al,01110000b
-
+		call CalcAleat
+		pop ax
+		and al,01110000b
+		cmp al,0
+		je novacor1
 
 		mov 	dh,	   car1	; Repete mais uma vez porque cada peça do tabuleiro ocupa dois carecteres de ecran
 		mov	es:[bx],   dh		
@@ -1397,8 +1478,69 @@ LER_SETA1:
 				
 		
 		jmp		LER_SETA1
-sair:
+		
+carregarGrelha:
+	mov 	contadorGrelha,0
+	xor 	cx,cx
+	mov     ah,3Dh
+	mov 	al,0
+	lea     dx,FichOld		
+	int     21h
+	jc      erro_abrir3				
+	mov     HandleFichNovo,ax		; ax devolve o Handle para o ficheiro 
+	call apaga_ecran
+	mov bx,HandleFichNovo
+	mov POSx,30
+	mov POSy,8
+tacCancer2:
+	goto_xy POSx,POSy
+	xor ax,ax
+	add	al, POSx ;
+	adc ax,0
+	add	al, POSx ; 2 * coluna
+	adc ax,0
+	mov guardar,ax
+	mov	al, 160		
+	mov	ah, POSy
+	mul	ah			; multiplicar o nº da linha por 160
+	add ax,guardar 	; somar tudo (160*linha)+(2*coluna)
+	adc ax,0
+	mov bx,ax
+	mov posInicial,bx
+	mov     ah,3fh			; indica que vai ser lido um ficheiro 
+    mov     bx,HandleFichNovo		; bx deve conter o Handle do ficheiro previamente aberto 
+    mov     cx,1			; numero de bytes a ler 
+    lea     dx,carLido		; vai ler para o local de memoria apontado por dx (car_fich)
+	int     21h				; faz efectivamente a leitura
+	mov	bx, posInicial
+	mov al,carLido
+	mov es:[bx+1],al
+	mov es:[bx+3],al
+
+	inc POSx
+	inc POSx
+	cmp POSx,48
+	jae mudardelinha2
+	jmp tacCancer2
+mudardelinha2:
+	cmp POSy,14
+	jae fecha_ficheiro8
+	inc POSy
+	mov POSx,30
+	jmp tacCancer2	
+fecha_ficheiro8:
 	mov 	grelha,0
+	mov     ah,3eh
+	mov     bx,HandleFichNovo
+	int     21h
+	mov POSx,30
+	mov POSy,8
+	jmp LER_SETA1	
+		
+		
+
+sair:
+	
 	mov 	contadorGrelha,0
 	xor 	cx,cx
 	mov     ah,3Dh
@@ -1409,23 +1551,46 @@ sair:
 	mov     HandleFichNovo,ax		; ax devolve o Handle para o ficheiro 
 	
 	mov bx,HandleFichNovo
-	mov	ax,0B800h
-	mov	es,ax
-escreverTudo:
-	mov ax,es:[contadorGrelha]
-	mov guardarWordGrelha,ax
-	mov cx,1
-	lea dx,guardarWordGrelha
+	mov POSx,30
+	mov POSy,8
+tacCancer:
+	goto_xy POSx,POSy
+	xor ax,ax
+	add	al, POSx ;
+	adc ax,0
+	add	al, POSx ; 2 * coluna
+	adc ax,0
+	mov guardar,ax
+	mov	al, 160		
+	mov	ah, POSy
+	mul	ah			; multiplicar o nº da linha por 160
+	add ax,guardar 	; somar tudo (160*linha)+(2*coluna)
+	adc ax,0
+	
+	mov bx,ax
+	mov ax,es:[bx]
+	mov bx,HandleFichNovo
+	mov bufferGrelha,ah
+	mov cl,1
+	lea dx,bufferGrelha
 	mov ah,40h
 	int 21h
-	inc contadorGrelha
-	inc contadorGrelha
-	cmp contadorGrelha,2000
-	je fecha_ficheiro3
-	jmp escreverTudo
+	inc POSx
+	inc POSx
+	cmp POSx,48
+	jae mudardelinha
+	jmp tacCancer
+mudardelinha:
+	cmp POSy,14
+	jae fecha_ficheiro3
+	inc POSy
+	mov POSx,30
+	jmp tacCancer
+	
 	
 
 fecha_ficheiro3:					; vamos fechar o ficheiro 
+	mov 	grelha,0
 	mov contadorGrelha,0
 	mov     ah,3eh
 	mov     bx,HandleFichNovo
@@ -1438,32 +1603,48 @@ erro_abrir3:
 	int     21h
 	jmp fim
 	
-ESTEND1:		
-		cmp 		al,48h
-		jne		BAIXO2
+ESTEND1:		cmp 		al,48h
+		jne		BAIXO3
 		dec		POSy		;cima
+		cmp POSy,8
+		jb	limitar11
 		jmp		CICLO1
-
-BAIXO2:		cmp		al,50h
+limitar11:
+		inc POSY
+		jmp Ciclo1
+BAIXO3:		cmp		al,50h
 		jne		ESQUERDA1
 		inc 		POSy		;Baixo
+		cmp POSy,14
+		jae	limitar22
 		jmp		CICLO1
-
+limitar22:
+		dec POSY
+		jmp Ciclo1
 ESQUERDA1:
 		cmp		al,4Bh
 		jne		DIREITA1
 		dec		POSx		;Esquerda
 		dec		POSx		;Esquerda
-
+		cmp POSx,30
+		jb	limitar33
 		jmp		CICLO1
-
+limitar33:
+		inc 	POSx
+		inc 	POSx
+		jmp Ciclo1
 DIREITA1:
 		cmp		al,4Dh
-		jne		LER_SETA1
+		jne		LER_SETA 
 		inc		POSx		;Direita
 		inc		POSx		;Direita
-		
+		cmp POSx,48
+		jae	limitar44
 		jmp		CICLO1
+limitar44:
+		dec 	POSx
+		dec 	POSx
+		jmp Ciclo1
 
 incAh:
 	xor ax,ax
