@@ -889,7 +889,7 @@ verticalCimaDeslizar:
 verticalCimaDeslizarNovaCor:
 	call CalcAleat
 	pop ax
-	and al,01110000b
+	and ah,01110000b
 	cmp al,0
 	je verticalCimaDeslizarNovaCor
 	cmp al,30
@@ -1411,10 +1411,10 @@ CICLO1:		goto_xy	POSxa,POSya	; Vai para a posição anterior do cursor
 		int		21H	
 
 		inc		POSxa
-		goto_xy		POSxa,POSya	
+		goto_xy		POSxa,POSya
 		mov		ah, 02h
 		mov		dl, Car2	; Repoe Caracter2 guardado 
-		int		21H	
+		int		21H		
 		dec 		POSxa
 		
 		goto_xy	POSx,POSy	; Vai para nova possição
@@ -1423,7 +1423,7 @@ CICLO1:		goto_xy	POSxa,POSya	; Vai para a posição anterior do cursor
 		int		10h		
 		mov		Car, al	; Guarda o Caracter que está na posição do Cursor
 		mov		Cor, ah	; Guarda a cor que está na posição do Cursor
-		
+jump2:
 		inc		POSx
 		goto_xy		POSx,POSy	; Vai para nova possição
 		mov 		ah, 08h
@@ -1475,9 +1475,13 @@ LER_SETA1:
 		cmp al,13
 		je	incAh
 		
+		cmp al,49
+		je	carinhaOuTraco
 				
 		
 		jmp		LER_SETA1
+
+	
 		
 carregarGrelha:
 	mov 	contadorGrelha,0
@@ -1645,6 +1649,38 @@ limitar44:
 		dec 	POSx
 		dec 	POSx
 		jmp Ciclo1
+
+carinhaOuTraco:
+	xor ax,ax
+	add	al, POSx ;
+	adc ax,0
+	add	al, POSx ; 2 * coluna
+	adc ax,0
+	mov guardar,ax
+	mov	al, 160		
+	mov	ah, POSy
+	mul	ah			; multiplicar o nº da linha por 160
+	add ax,guardar 	; somar tudo (160*linha)+(2*coluna)
+	adc ax,0
+	mov bx,ax
+	mov ax,es:[bx]
+	cmp al,' '
+	jne	compararCarinha
+	mov al,1
+	mov es:[bx],al
+	jmp LER_SETA1
+compararCarinha:
+	cmp al,1
+	jne tirartraco
+	mov al,45
+	mov es:[bx],al
+	jmp LER_SETA1
+tirartraco:
+	mov al,' '
+	mov es:[bx],al
+	jmp LER_SETA1
+	
+		
 
 incAh:
 	xor ax,ax
